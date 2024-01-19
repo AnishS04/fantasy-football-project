@@ -1,12 +1,13 @@
 import openpyxl
 import pandas as pd
+import re
 
 # Remove unnecessary columns
 wb = openpyxl.load_workbook('fantasy_football_data.xlsx')
 
 
 def clean_player_info(player_info):
-    return str(player_info).replace("IA", "").replace("IR", "").replace("View News", "").replace("Q ", "")
+    return re.sub(r'\bQ\b(?!\s*QB)', '', str(player_info)).replace("IA", "").replace("IR", "").replace("View News", "")
 
 
 for sheet in wb:
@@ -83,10 +84,15 @@ for sheet_name in xls.sheet_names:
     df = df[['Rank'] + [col for col in df.columns if col != 'Rank']]
     df = df.sort_values(by=['Rank', 'Total Fantasy Points'], ascending=[True, False]).reset_index(drop=True)
 
+    # Get position and team
+    df[['Position', 'Team']] = df['Player'].str.extract(r'(\b\w{1,2}\b)\s*-\s*(.*(?:\s*M\s*)?)')
+    df['Player'] = df['Player'].replace(r'(\b\w{1,2}\b)\s*-\s*(\b\w{2,4}\b)', '', regex=True).str.strip()
+    df['Player'] = df['Player'].apply(lambda player: player[:-6] if player.endswith('M') else player)
+    df = df[['Rank', 'Player', 'Position', 'Team'] + [col for col in df.columns if
+                                                      col not in ['Rank', 'Player', 'Position', 'Team']]]
+
     dfs[sheet_name] = df
 
 with pd.ExcelWriter(excel_file_path, engine='xlsxwriter') as writer:
     for sheet_name, df in dfs.items():
         df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-
